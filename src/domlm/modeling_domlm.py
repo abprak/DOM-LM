@@ -48,36 +48,57 @@ class TreePositionEmbeddings(nn.Module):
     def __init__(self, config):
         super(TreePositionEmbeddings, self).__init__()
         self.node_embeddings = nn.Embedding(
-            config.max_node_embeddings, config.hidden_size, padding_idx=config.node_pad_id # p0
+            config.max_node_embeddings,
+            config.hidden_size,
+            padding_idx=config.node_pad_id  # p0
         )
         self.parent_embeddings = nn.Embedding(
-            config.max_node_embeddings, config.hidden_size, padding_idx=config.node_pad_id # p1 # should be same emb as p0?
+            # p1 # should be same emb as p0?
+            config.max_node_embeddings,
+            config.hidden_size,
+            padding_idx=config.node_pad_id
         )
         self.sibling_embeddings = nn.Embedding(
-            config.max_sibling_embeddings, config.hidden_size, padding_idx=config.sibling_pad_id # p2
+            config.max_sibling_embeddings,
+            config.hidden_size,
+            padding_idx=config.sibling_pad_id  # p2
         )
         self.depth_embeddings = nn.Embedding(
-            config.max_depth_embeddings, config.hidden_size, padding_idx=config.depth_pad_id # p3
+            config.max_depth_embeddings,
+            config.hidden_size,
+            padding_idx=config.depth_pad_id  # p3
         )
         self.tag_embeddings = nn.Embedding(
-            config.max_tag_embeddings, config.hidden_size, padding_idx=config.tag_pad_id # p4
+            config.max_tag_embeddings,
+            config.hidden_size,
+            padding_idx=config.tag_pad_id  # p4
         )
 
-    def forward(self, node_ids=None, parent_node_ids=None,sibling_node_ids=None,depth_ids=None,tag_ids=None):
-        embeddings = (        
+    def forward(self,
+                node_ids=None,
+                parent_node_ids=None,
+                sibling_node_ids=None,
+                depth_ids=None,
+                tag_ids=None):
+        embeddings = (
             self.node_embeddings(node_ids) +
             self.parent_embeddings(parent_node_ids) +
             self.sibling_embeddings(sibling_node_ids) +
             self.depth_embeddings(depth_ids) +
             self.tag_embeddings(tag_ids)
-        )        
+        )
         return embeddings
 
 
-# Copied from transformers.models.roberta.modeling_roberta.create_position_ids_from_input_ids
-def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
+# Copied from
+# transformers.models.roberta.modeling_roberta
+# .create_position_ids_from_input_ids
+def create_position_ids_from_input_ids(input_ids,
+                                       padding_idx,
+                                       past_key_values_length=0):
     """
-    Replace non-padding symbols with their position numbers. Position numbers begin at padding_idx+1. Padding symbols
+    Replace non-padding symbols with their position numbers.
+    Position numbers begin at padding_idx+1. Padding symbols
     are ignored. This is modified from fairseq's `utils.make_positions`.
 
     Args:
@@ -85,36 +106,57 @@ def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_l
 
     Returns: torch.Tensor
     """
-    # The series of casts and type-conversions here are carefully balanced to both work with ONNX export and XLA.
+    # The series of casts and type-conversions here are carefully
+    # balanced to both work with ONNX export and XLA.
     mask = input_ids.ne(padding_idx).int()
-    incremental_indices = (torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length) * mask
+    incremental_indices = (torch.cumsum(mask, dim=1).type_as(
+        mask) + past_key_values_length) * mask
     return incremental_indices.long() + padding_idx
 
 
 class DOMLMEmbeddings(nn.Module):
-    """Construct the embeddings from word, position and token_type embeddings."""
+    """
+    Construct the embeddings from word, position and token_type embeddings.
+    """
 
     def __init__(self, config):
         super(DOMLMEmbeddings, self).__init__()
         self.config = config
         self.padding_idx = config.pad_token_id
 
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
-        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size,padding_idx=self.padding_idx)        
+        self.word_embeddings = nn.Embedding(
+            config.vocab_size,
+            config.hidden_size,
+            padding_idx=config.pad_token_id)
+
+        self.position_embeddings = nn.Embedding(
+            config.max_position_embeddings,
+            config.hidden_size,
+            padding_idx=self.padding_idx)
 
         self.tree_embeddings = TreePositionEmbeddings(config)
 
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.token_type_embeddings = nn.Embedding(
+            config.type_vocab_size,
+            config.hidden_size)
 
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size,
+            eps=config.layer_norm_eps)
+
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
+        self.register_buffer(
+            "position_ids",
+            torch.arange(config.max_position_embeddings).expand((1, -1)))
 
-    # Copied from transformers.models.roberta.modeling_roberta.RobertaEmbeddings.create_position_ids_from_inputs_embeds
+    # Copied from transformers.models.roberta.modeling_roberta.
+    # RobertaEmbeddings.create_position_ids_from_inputs_embeds
     def create_position_ids_from_inputs_embeds(self, inputs_embeds):
         """
-        We are provided embeddings directly. We cannot infer which are padded so just generate sequential position ids.
+        We are provided embeddings directly.
+        We cannot infer which are padded so
+        just generate sequential position ids.
 
         Args:
             inputs_embeds: torch.Tensor
@@ -125,14 +167,17 @@ class DOMLMEmbeddings(nn.Module):
         sequence_length = input_shape[1]
 
         position_ids = torch.arange(
-            self.padding_idx + 1, sequence_length + self.padding_idx + 1, dtype=torch.long, device=inputs_embeds.device
+            self.padding_idx + 1,
+            sequence_length + self.padding_idx + 1,
+            dtype=torch.long,
+            device=inputs_embeds.device
         )
         return position_ids.unsqueeze(0).expand(input_shape)
 
     def forward(
         self,
         input_ids=None,
-        node_ids=None, 
+        node_ids=None,
         parent_node_ids=None,
         sibling_node_ids=None,
         depth_ids=None,
@@ -147,55 +192,71 @@ class DOMLMEmbeddings(nn.Module):
         else:
             input_shape = inputs_embeds.size()[:-1]
 
-        device = input_ids.device if input_ids is not None else inputs_embeds.device
+        device = input_ids.device if input_ids is not None \
+            else inputs_embeds.device
 
         if position_ids is None:
             if input_ids is not None:
-                # Create the position ids from the input token ids. Any padded tokens remain padded.
-                position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx, past_key_values_length)
+                # Create the position ids from the input token ids.
+                # Any padded tokens remain padded.
+                position_ids = create_position_ids_from_input_ids(
+                    input_ids, self.padding_idx, past_key_values_length)
             else:
-                position_ids = self.create_position_ids_from_inputs_embeds(inputs_embeds)
+                position_ids = self.create_position_ids_from_inputs_embeds(
+                    inputs_embeds)
 
         if token_type_ids is None:
-            token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
+            token_type_ids = torch.zeros(
+                input_shape, dtype=torch.long, device=device)
 
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
 
         # prepare tree features
         if node_ids is None:
-            node_ids = self.config.node_pad_id * torch.ones(input_shape, dtype=torch.long, device=device)
+            node_ids = self.config.node_pad_id * \
+                torch.ones(input_shape, dtype=torch.long, device=device)
         if parent_node_ids is None:
-            parent_node_ids = self.config.node_pad_id * torch.ones(input_shape, dtype=torch.long, device=device)
+            parent_node_ids = self.config.node_pad_id * \
+                torch.ones(input_shape, dtype=torch.long, device=device)
         if sibling_node_ids is None:
-            sibling_node_ids = self.config.sibling_pad_id * torch.ones(input_shape, dtype=torch.long, device=device)
+            sibling_node_ids = self.config.sibling_pad_id * \
+                torch.ones(input_shape, dtype=torch.long, device=device)
         if depth_ids is None:
-            depth_ids = self.config.depth_pad_id * torch.ones(input_shape, dtype=torch.long, device=device)
+            depth_ids = self.config.depth_pad_id * \
+                torch.ones(input_shape, dtype=torch.long, device=device)
         if tag_ids is None:
-            tag_ids = self.config.tag_pad_id * torch.ones(input_shape, dtype=torch.long, device=device)
+            tag_ids = self.config.tag_pad_id * \
+                torch.ones(input_shape, dtype=torch.long, device=device)
 
         words_embeddings = inputs_embeds
         position_embeddings = self.position_embeddings(position_ids)
 
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
-        dom_embeddings = self.tree_embeddings(node_ids, parent_node_ids,sibling_node_ids,depth_ids,tag_ids)
-        embeddings = words_embeddings + position_embeddings + token_type_embeddings + dom_embeddings
+        dom_embeddings = self.tree_embeddings(
+            node_ids, parent_node_ids, sibling_node_ids, depth_ids, tag_ids)
+        embeddings = words_embeddings + position_embeddings + \
+            token_type_embeddings + dom_embeddings
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
 
 
-# Copied from transformers.models.bert.modeling_bert.BertSelfOutput with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertSelfOutput with Bert->DOMLM
 class DOMLMSelfOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+    def forward(self,
+                hidden_states: torch.Tensor,
+                input_tensor: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
@@ -218,15 +279,19 @@ class DOMLMIntermediate(nn.Module):
         return hidden_states
 
 
-# Copied from transformers.models.bert.modeling_bert.BertOutput with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertOutput with Bert->DOMLM
 class DOMLMOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+    def forward(self,
+                hidden_states: torch.Tensor,
+                input_tensor: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
@@ -249,7 +314,8 @@ class DOMLMPooler(nn.Module):
         return pooled_output
 
 
-# Copied from transformers.models.bert.modeling_bert.BertPredictionHeadTransform with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertPredictionHeadTransform with Bert->DOMLM
 class DOMLMPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -258,7 +324,8 @@ class DOMLMPredictionHeadTransform(nn.Module):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -267,7 +334,8 @@ class DOMLMPredictionHeadTransform(nn.Module):
         return hidden_states
 
 
-# Copied from transformers.models.bert.modeling_bert.BertLMPredictionHead with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertLMPredictionHead with Bert->DOMLM
 class DOMLMLMPredictionHead(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -275,11 +343,13 @@ class DOMLMLMPredictionHead(nn.Module):
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.decoder = nn.Linear(
+            config.hidden_size, config.vocab_size, bias=False)
 
         self.bias = nn.Parameter(torch.zeros(config.vocab_size))
 
-        # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
+        # Need a link between the two variables so that the bias is correctly
+        # resized with `resize_token_embeddings`
         self.decoder.bias = self.bias
 
     def forward(self, hidden_states):
@@ -288,7 +358,8 @@ class DOMLMLMPredictionHead(nn.Module):
         return hidden_states
 
 
-# Copied from transformers.models.bert.modeling_bert.BertOnlyMLMHead with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertOnlyMLMHead with Bert->DOMLM
 class DOMLMOnlyMLMHead(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -299,19 +370,24 @@ class DOMLMOnlyMLMHead(nn.Module):
         return prediction_scores
 
 
-# Copied from transformers.models.bert.modeling_bert.BertSelfAttention with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertSelfAttention with Bert->DOMLM
 class DOMLMSelfAttention(nn.Module):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
-        if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
+        if config.hidden_size % config.num_attention_heads != 0 and \
+                not hasattr(config, "embedding_size"):
             raise ValueError(
-                f"The hidden size ({config.hidden_size}) is not a multiple of the number of attention "
+                f"The hidden size ({config.hidden_size}) is not a "
+                f"multiple of the number of attention "
                 f"heads ({config.num_attention_heads})"
             )
 
         self.num_attention_heads = config.num_attention_heads
-        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
-        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.attention_head_size = int(
+            config.hidden_size / config.num_attention_heads)
+        self.all_head_size = \
+            self.num_attention_heads * self.attention_head_size
 
         self.query = nn.Linear(config.hidden_size, self.all_head_size)
         self.key = nn.Linear(config.hidden_size, self.all_head_size)
@@ -321,14 +397,18 @@ class DOMLMSelfAttention(nn.Module):
         self.position_embedding_type = position_embedding_type or getattr(
             config, "position_embedding_type", "absolute"
         )
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
+        if self.position_embedding_type == "relative_key" or \
+                self.position_embedding_type == "relative_key_query":
             self.max_position_embeddings = config.max_position_embeddings
-            self.distance_embedding = nn.Embedding(2 * config.max_position_embeddings - 1, self.attention_head_size)
+            self.distance_embedding = nn.Embedding(
+                2 * config.max_position_embeddings - 1,
+                self.attention_head_size)
 
         self.is_decoder = config.is_decoder
 
     def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.size()[
+            :-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(new_x_shape)
         return x.permute(0, 2, 1, 3)
 
@@ -355,8 +435,10 @@ class DOMLMSelfAttention(nn.Module):
             value_layer = past_key_value[1]
             attention_mask = encoder_attention_mask
         elif is_cross_attention:
-            key_layer = self.transpose_for_scores(self.key(encoder_hidden_states))
-            value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
+            key_layer = self.transpose_for_scores(
+                self.key(encoder_hidden_states))
+            value_layer = self.transpose_for_scores(
+                self.value(encoder_hidden_states))
             attention_mask = encoder_attention_mask
         elif past_key_value is not None:
             key_layer = self.transpose_for_scores(self.key(hidden_states))
@@ -371,43 +453,66 @@ class DOMLMSelfAttention(nn.Module):
 
         use_cache = past_key_value is not None
         if self.is_decoder:
-            # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
-            # Further calls to cross_attention layer can then reuse all cross-attention
-            # key/value_states (first "if" case)
-            # if uni-directional self-attention (decoder) save Tuple(torch.Tensor, torch.Tensor) of
-            # all previous decoder key/value_states. Further calls to uni-directional self-attention
-            # can concat previous decoder key/value_states to current projected key/value_states (third "elif" case)
-            # if encoder bi-directional self-attention `past_key_value` is always `None`
+            # if cross_attention save Tuple(torch.Tensor, torch.Tensor)
+            # of all cross attention key/value_states.
+            # Further calls to cross_attention layer can then reuse all
+            # cross-attention key/value_states (first "if" case)
+            # if uni-directional self-attention (decoder) save
+            # Tuple(torch.Tensor, torch.Tensor) of all previous decoder
+            # key/value_states. Further calls to uni-directional self-attention
+            # can concat previous decoder key/value_states to current
+            # projected key/value_states (third "elif" case)
+            # if encoder bi-directional self-attention `past_key_value`
+            # is always `None`
             past_key_value = (key_layer, value_layer)
 
-        # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        # Take the dot product between "query" and "key"
+        # to get the raw attention scores.
+        attention_scores = torch.matmul(
+            query_layer, key_layer.transpose(-1, -2))
 
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
+        if self.position_embedding_type == "relative_key" or \
+                self.position_embedding_type == "relative_key_query":
             query_length, key_length = query_layer.shape[2], key_layer.shape[2]
             if use_cache:
-                position_ids_l = torch.tensor(key_length - 1, dtype=torch.long, device=hidden_states.device).view(
-                    -1, 1
-                )
+                position_ids_l = \
+                    torch.tensor(key_length - 1,
+                                 dtype=torch.long,
+                                 device=hidden_states.device).view(-1, 1)
             else:
-                position_ids_l = torch.arange(query_length, dtype=torch.long, device=hidden_states.device).view(-1, 1)
-            position_ids_r = torch.arange(key_length, dtype=torch.long, device=hidden_states.device).view(1, -1)
+                position_ids_l = torch.arange(
+                    query_length,
+                    dtype=torch.long,
+                    device=hidden_states.device).view(-1, 1)
+            position_ids_r = torch.arange(
+                key_length,
+                dtype=torch.long,
+                device=hidden_states.device).view(1, -1)
             distance = position_ids_l - position_ids_r
 
-            positional_embedding = self.distance_embedding(distance + self.max_position_embeddings - 1)
-            positional_embedding = positional_embedding.to(dtype=query_layer.dtype)  # fp16 compatibility
+            positional_embedding = self.distance_embedding(
+                distance + self.max_position_embeddings - 1)
+            positional_embedding = positional_embedding.to(
+                dtype=query_layer.dtype)  # fp16 compatibility
 
             if self.position_embedding_type == "relative_key":
-                relative_position_scores = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
+                relative_position_scores = torch.einsum(
+                    "bhld,lrd->bhlr", query_layer, positional_embedding)
                 attention_scores = attention_scores + relative_position_scores
             elif self.position_embedding_type == "relative_key_query":
-                relative_position_scores_query = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
-                relative_position_scores_key = torch.einsum("bhrd,lrd->bhlr", key_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores_query + relative_position_scores_key
+                relative_position_scores_query = torch.einsum(
+                    "bhld,lrd->bhlr", query_layer, positional_embedding)
+                relative_position_scores_key = torch.einsum(
+                    "bhrd,lrd->bhlr", key_layer, positional_embedding)
+                attention_scores = attention_scores + \
+                    relative_position_scores_query + \
+                    relative_position_scores_key
 
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
+        attention_scores = attention_scores / \
+            math.sqrt(self.attention_head_size)
         if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in DOMLMModel forward() function)
+            # Apply the attention mask
+            # (precomputed for all layers in DOMLMModel forward() function)
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -424,21 +529,25 @@ class DOMLMSelfAttention(nn.Module):
         context_layer = torch.matmul(attention_probs, value_layer)
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.size()[
+            :-2] + (self.all_head_size,)
         context_layer = context_layer.view(new_context_layer_shape)
 
-        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
+        outputs = (context_layer, attention_probs) if output_attentions else (
+            context_layer,)
 
         if self.is_decoder:
             outputs = outputs + (past_key_value,)
         return outputs
 
 
-# Copied from transformers.models.bert.modeling_bert.BertAttention with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertAttention with Bert->DOMLM
 class DOMLMAttention(nn.Module):
     def __init__(self, config, position_embedding_type=None):
         super().__init__()
-        self.self = DOMLMSelfAttention(config, position_embedding_type=position_embedding_type)
+        self.self = DOMLMSelfAttention(
+            config, position_embedding_type=position_embedding_type)
         self.output = DOMLMSelfOutput(config)
         self.pruned_heads = set()
 
@@ -446,7 +555,10 @@ class DOMLMAttention(nn.Module):
         if len(heads) == 0:
             return
         heads, index = find_pruneable_heads_and_indices(
-            heads, self.self.num_attention_heads, self.self.attention_head_size, self.pruned_heads
+            heads,
+            self.self.num_attention_heads,
+            self.self.attention_head_size,
+            self.pruned_heads
         )
 
         # Prune linear layers
@@ -456,8 +568,10 @@ class DOMLMAttention(nn.Module):
         self.output.dense = prune_linear_layer(self.output.dense, index, dim=1)
 
         # Update hyper params and store pruned heads
-        self.self.num_attention_heads = self.self.num_attention_heads - len(heads)
-        self.self.all_head_size = self.self.attention_head_size * self.self.num_attention_heads
+        self.self.num_attention_heads = \
+            self.self.num_attention_heads - len(heads)
+        self.self.all_head_size = \
+            self.self.attention_head_size * self.self.num_attention_heads
         self.pruned_heads = self.pruned_heads.union(heads)
 
     def forward(
@@ -480,7 +594,8 @@ class DOMLMAttention(nn.Module):
             output_attentions,
         )
         attention_output = self.output(self_outputs[0], hidden_states)
-        outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
+        # add attentions if we output them
+        outputs = (attention_output,) + self_outputs[1:]
         return outputs
 
 
@@ -495,8 +610,12 @@ class DOMLMLayer(nn.Module):
         self.add_cross_attention = config.add_cross_attention
         if self.add_cross_attention:
             if not self.is_decoder:
-                raise ValueError(f"{self} should be used as a decoder model if cross attention is added")
-            self.crossattention = DOMLMAttention(config, position_embedding_type="absolute")
+                raise ValueError(
+                    f"{self} should be used as a decoder model "
+                    f"if cross attention is added"
+                    )
+            self.crossattention = DOMLMAttention(
+                config, position_embedding_type="absolute")
         self.intermediate = DOMLMIntermediate(config)
         self.output = DOMLMOutput(config)
 
@@ -510,8 +629,10 @@ class DOMLMLayer(nn.Module):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
-        self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
+        # decoder uni-directional self-attention cached key/values
+        # tuple is at positions 1,2
+        self_attn_past_key_value = past_key_value[:2] \
+                if past_key_value is not None else None
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
@@ -526,18 +647,22 @@ class DOMLMLayer(nn.Module):
             outputs = self_attention_outputs[1:-1]
             present_key_value = self_attention_outputs[-1]
         else:
-            outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
+            # add self attentions if we output attention weights
+            outputs = self_attention_outputs[1:]
 
         cross_attn_present_key_value = None
         if self.is_decoder and encoder_hidden_states is not None:
             if not hasattr(self, "crossattention"):
                 raise ValueError(
-                    f"If `encoder_hidden_states` are passed, {self} has to be instantiated with cross-attention layers"
+                    f"If `encoder_hidden_states` are passed, {self} "
+                    "has to be instantiated with cross-attention layers"
                     " by setting `config.add_cross_attention=True`"
                 )
 
-            # cross_attn cached key/values tuple is at positions 3,4 of past_key_value tuple
-            cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
+            # cross_attn cached key/values tuple is at
+            # positions 3,4 of past_key_value tuple
+            cross_attn_past_key_value = past_key_value[-2:] \
+                if past_key_value is not None else None
             cross_attention_outputs = self.crossattention(
                 attention_output,
                 attention_mask,
@@ -548,14 +673,19 @@ class DOMLMLayer(nn.Module):
                 output_attentions,
             )
             attention_output = cross_attention_outputs[0]
-            outputs = outputs + cross_attention_outputs[1:-1]  # add cross attentions if we output attention weights
+            # add cross attentions if we output attention weights
+            outputs = outputs + cross_attention_outputs[1:-1]
 
             # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
-            present_key_value = present_key_value + cross_attn_present_key_value
+            present_key_value = \
+                present_key_value + cross_attn_present_key_value
 
         layer_output = apply_chunking_to_forward(
-            self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
+            self.feed_forward_chunk,
+            self.chunk_size_feed_forward,
+            self.seq_len_dim,
+            attention_output
         )
         outputs = (layer_output,) + outputs
 
@@ -571,12 +701,14 @@ class DOMLMLayer(nn.Module):
         return layer_output
 
 
-# Copied from transformers.models.bert.modeling_bert.BertEncoder with Bert->DOMLM
+# Copied from transformers.models.bert.modeling_bert.
+# BertEncoder with Bert->DOMLM
 class DOMLMEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.layer = nn.ModuleList([DOMLMLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layer = nn.ModuleList([DOMLMLayer(config)
+                                   for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
@@ -592,9 +724,11 @@ class DOMLMEncoder(nn.Module):
         output_hidden_states: Optional[bool] = False,
         return_dict: Optional[bool] = True,
     ) -> Union[Tuple[torch.Tensor], BaseModelOutputWithPastAndCrossAttentions]:
+
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
-        all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
+        all_cross_attentions = () if output_attentions and \
+            self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
@@ -602,19 +736,23 @@ class DOMLMEncoder(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             layer_head_mask = head_mask[i] if head_mask is not None else None
-            past_key_value = past_key_values[i] if past_key_values is not None else None
+            past_key_value = past_key_values[i] \
+                if past_key_values is not None else None
 
             if self.gradient_checkpointing and self.training:
 
                 if use_cache:
                     logger.warning(
-                        "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
+                        "`use_cache=True` is incompatible with gradient "
+                        "checkpointing. Setting `use_cache=False`..."
                     )
                     use_cache = False
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
-                        return module(*inputs, past_key_value, output_attentions)
+                        return module(*inputs,
+                                      past_key_value,
+                                      output_attentions)
 
                     return custom_forward
 
@@ -643,7 +781,8 @@ class DOMLMEncoder(nn.Module):
             if output_attentions:
                 all_self_attentions = all_self_attentions + (layer_outputs[1],)
                 if self.config.add_cross_attention:
-                    all_cross_attentions = all_cross_attentions + (layer_outputs[2],)
+                    all_cross_attentions = all_cross_attentions + \
+                        (layer_outputs[2],)
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -671,7 +810,8 @@ class DOMLMEncoder(nn.Module):
 
 class DOMLMPreTrainedModel(PreTrainedModel):
     """
-    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
+    An abstract class to handle weights initialization and
+    a simple interface for downloading and loading pretrained
     models.
     """
 
@@ -681,17 +821,21 @@ class DOMLMPreTrainedModel(PreTrainedModel):
     _keys_to_ignore_on_load_missing = [r"position_ids"]
     supports_gradient_checkpointing = True
 
-    # Copied from transformers.models.bert.modeling_bert.BertPreTrainedModel._init_weights with Bert->DOMLM
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertPreTrainedModel._init_weights with Bert->DOMLM
     def _init_weights(self, module):
         """Initialize the weights"""
         if isinstance(module, nn.Linear):
-            # Slightly different from the TF version which uses truncated_normal for initialization
+            # Slightly different from the TF version which uses
+            # truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            module.weight.data.normal_(
+                mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            module.weight.data.normal_(
+                mean=0.0, std=self.config.initializer_range)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
         elif isinstance(module, nn.LayerNorm):
@@ -699,21 +843,28 @@ class DOMLMPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, **kwargs):
+    def from_pretrained(
+            cls,
+            pretrained_model_name_or_path: Optional[Union[str, os.PathLike]],
+            *model_args,
+            **kwargs):
         return super(DOMLMPreTrainedModel, cls).from_pretrained(
             pretrained_model_name_or_path, *model_args, **kwargs
         )
-        
+
 
 DOMLM_START_DOCSTRING = r"""
-    This model is a PyTorch [torch.nn.Module](https://pytorch.org/docs/stable/nn.html#torch.nn.Module) sub-class. Use
-    it as a regular PyTorch Module and refer to the PyTorch documentation for all matter related to general usage and
-    behavior.
+    This model is a PyTorch
+    [torch.nn.Module](https://pytorch.org/docs/stable/nn.html#torch.nn.Module)
+    sub-class. Use it as a regular PyTorch Module and refer to the PyTorch
+    documentation for all matter related to general usage and behavior.
 
     Parameters:
-        config ([`DOMLMConfig`]): Model configuration class with all the parameters of the model.
-            Initializing with a config file does not load the weights associated with the model, only the
-            configuration. Check out the [`~PreTrainedModel.from_pretrained`] method to load the model weights.
+        config ([`DOMLMConfig`]): Model configuration class with all the
+            parameters of the model. Initializing with a config file does
+            not load the weights associated with the model, only the
+            configuration. Check out the [`~PreTrainedModel.from_pretrained`]
+            method to load the model weights.
 """
 
 DOMLM_INPUTS_DOCSTRING = r"""
@@ -721,56 +872,75 @@ DOMLM_INPUTS_DOCSTRING = r"""
         input_ids (`torch.LongTensor` of shape `({0})`):
             Indices of input sequence tokens in the vocabulary.
 
-            Indices can be obtained using [`DOMLMTokenizer`]. See [`PreTrainedTokenizer.encode`] and
+            Indices can be obtained using [`DOMLMTokenizer`].
+            See [`PreTrainedTokenizer.encode`] and
             [`PreTrainedTokenizer.__call__`] for details.
 
             [What are input IDs?](../glossary#input-ids)
 
-        xpath_tags_seq (`torch.LongTensor` of shape `({0}, config.max_depth)`, *optional*):
-            Tag IDs for each token in the input sequence, padded up to config.max_depth.
+        xpath_tags_seq
+          (`torch.LongTensor` of shape `({0}, config.max_depth)`, *optional*):
+            Tag IDs for each token in the input sequence, padded up to
+            config.max_depth.
 
-        xpath_subs_seq (`torch.LongTensor` of shape `({0}, config.max_depth)`, *optional*):
-            Subscript IDs for each token in the input sequence, padded up to config.max_depth.
+        xpath_subs_seq
+          (`torch.LongTensor` of shape `({0}, config.max_depth)`, *optional*):
+            Subscript IDs for each token in the input sequence, padded up to
+            config.max_depth.
 
         attention_mask (`torch.FloatTensor` of shape `({0})`, *optional*):
-            Mask to avoid performing attention on padding token indices. Mask values selected in `[0, 1]`: `1` for
-            tokens that are NOT MASKED, `0` for MASKED tokens.
+            Mask to avoid performing attention on padding token indices.
+            Mask values selected in `[0, 1]`: `1` for tokens that are
+            NOT MASKED, `0` for MASKED tokens.
 
             [What are attention masks?](../glossary#attention-mask)
         token_type_ids (`torch.LongTensor` of shape `({0})`, *optional*):
-            Segment token indices to indicate first and second portions of the inputs. Indices are selected in `[0,
-            1]`: `0` corresponds to a *sentence A* token, `1` corresponds to a *sentence B* token
+            Segment token indices to indicate first and second portions of the
+            inputs. Indices are selected in `[0,1]`: `0` corresponds to a
+            *sentence A* token, `1` corresponds to a *sentence B* token
 
             [What are token type IDs?](../glossary#token-type-ids)
         position_ids (`torch.LongTensor` of shape `({0})`, *optional*):
-            Indices of positions of each input sequence tokens in the position embeddings. Selected in the range `[0,
-            config.max_position_embeddings - 1]`.
+            Indices of positions of each input sequence tokens in the position
+            embeddings. Selected in the range
+            `[0,config.max_position_embeddings - 1]`.
 
             [What are position IDs?](../glossary#position-ids)
-        head_mask (`torch.FloatTensor` of shape `(num_heads,)` or `(num_layers, num_heads)`, *optional*):
-            Mask to nullify selected heads of the self-attention modules. Mask values selected in `[0, 1]`: `1`
-            indicates the head is **not masked**, `0` indicates the head is **masked**.
-        inputs_embeds (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
-            Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation. This
-            is useful if you want more control over how to convert *input_ids* indices into associated vectors than the
-            model's internal embedding lookup matrix.
+        head_mask
+          (`torch.FloatTensor` of shape `(num_heads,)` or
+          `(num_layers, num_heads)`, *optional*):
+            Mask to nullify selected heads of the self-attention modules.
+            Mask values selected in `[0, 1]`: `1` indicates the head is
+            **not masked**, `0` indicates the head is **masked**.
+        inputs_embeds
+          (`torch.FloatTensor` of shape
+          `(batch_size, sequence_length, hidden_size)`, *optional*):
+            Optionally, instead of passing `input_ids` you can choose to
+            directly pass an embedded representation. This is useful if you
+            want more control over how to convert *input_ids* indices into
+            associated vectors than the model's internal
+            embedding lookup matrix.
         output_attentions (`bool`, *optional*):
-            If set to `True`, the attentions tensors of all attention layers are returned. See `attentions` under
-            returned tensors for more detail.
-        output_hidden_states (`bool`, *optional*):
-            If set to `True`, the hidden states of all layers are returned. See `hidden_states` under returned tensors
+            If set to `True`, the attentions tensors of all attention layers
+            are returned. See `attentions` under returned tensors
             for more detail.
+        output_hidden_states (`bool`, *optional*):
+            If set to `True`, the hidden states of all layers are returned.
+            See `hidden_states` under returned tensors for more detail.
         return_dict (`bool`, *optional*):
-            If set to `True`, the model will return a [`~file_utils.ModelOutput`] instead of a plain tuple.
+            If set to `True`, the model will return a
+            [`~file_utils.ModelOutput`] instead of a plain tuple.
 """
 
 
 @add_start_docstrings(
-    "The bare DOMLM Model transformer outputting raw hidden-states without any specific head on top.",
+    "The bare DOMLM Model transformer outputting raw "
+    "hidden-states without any specific head on top.",
     DOMLM_START_DOCSTRING,
 )
 class DOMLMModel(DOMLMPreTrainedModel):
-    # Copied from transformers.models.bert.modeling_bert.BertModel.__init__ with Bert->DOMLM
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertModel.__init__ with Bert->DOMLM
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
@@ -791,18 +961,23 @@ class DOMLMModel(DOMLMPreTrainedModel):
 
     def _prune_heads(self, heads_to_prune):
         """
-        Prunes heads of the model. heads_to_prune: dict of {layer_num: list of heads to prune in this layer} See base
-        class PreTrainedModel
+        Prunes heads of the model.
+        heads_to_prune: dict of {layer_num: list of heads to
+                                    prune in this layer}
+        See base class PreTrainedModel
         """
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    @add_start_docstrings_to_model_forward(DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    @replace_return_docstrings(output_type=BaseModelOutputWithPoolingAndCrossAttentions, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(
+            DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(
+        output_type=BaseModelOutputWithPoolingAndCrossAttentions,
+        config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
-        node_ids: Optional[torch.LongTensor] = None, 
+        node_ids: Optional[torch.LongTensor] = None,
         parent_node_ids: Optional[torch.LongTensor] = None,
         sibling_node_ids: Optional[torch.LongTensor] = None,
         depth_ids: Optional[torch.LongTensor] = None,
@@ -827,7 +1002,8 @@ class DOMLMModel(DOMLMPreTrainedModel):
         >>> processor = DOMLMProcessor.from_pretrained("microsoft/DOMLM-base")
         >>> model = DOMLMModel.from_pretrained("microsoft/DOMLM-base")
 
-        >>> html_string = "<html> <head> <title>Page Title</title> </head> </html>"
+        >>> html_string = \
+                    "<html> <head> <title>Page Title</title> </head> </html>"
 
         >>> encoding = processor(html_string, return_tensors="pt")
 
@@ -836,28 +1012,37 @@ class DOMLMModel(DOMLMPreTrainedModel):
         >>> list(last_hidden_states.shape)
         [1, 4, 768]
         ```"""
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = output_attentions \
+            if output_attentions is not None \
+            else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = return_dict if return_dict is not None else \
+            self.config.use_return_dict
 
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
+            raise ValueError(
+                "You cannot specify both input_ids and "
+                " inputs_embeds at the same time")
         elif input_ids is not None:
             input_shape = input_ids.size()
         elif inputs_embeds is not None:
             input_shape = inputs_embeds.size()[:-1]
         else:
-            raise ValueError("You have to specify either input_ids or inputs_embeds")
+            raise ValueError(
+                "You have to specify either input_ids or inputs_embeds")
 
-        device = input_ids.device if input_ids is not None else inputs_embeds.device
+        device = input_ids.device if input_ids is not None \
+            else inputs_embeds.device
 
         if attention_mask is None:
             attention_mask = torch.ones(input_shape, device=device)
 
         if token_type_ids is None:
-            token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
+            token_type_ids = torch.zeros(
+                input_shape, dtype=torch.long, device=device)
 
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
         extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)
@@ -865,8 +1050,10 @@ class DOMLMModel(DOMLMPreTrainedModel):
 
         if head_mask is not None:
             if head_mask.dim() == 1:
-                head_mask = head_mask.unsqueeze(0).unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-                head_mask = head_mask.expand(self.config.num_hidden_layers, -1, -1, -1, -1)
+                head_mask = head_mask.unsqueeze(0).unsqueeze(
+                    0).unsqueeze(-1).unsqueeze(-1)
+                head_mask = head_mask.expand(
+                    self.config.num_hidden_layers, -1, -1, -1, -1)
             elif head_mask.dim() == 2:
                 head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
             head_mask = head_mask.to(dtype=next(self.parameters()).dtype)
@@ -875,7 +1062,7 @@ class DOMLMModel(DOMLMPreTrainedModel):
 
         embedding_output = self.embeddings(
             input_ids=input_ids,
-            node_ids=node_ids, 
+            node_ids=node_ids,
             parent_node_ids=parent_node_ids,
             sibling_node_ids=sibling_node_ids,
             depth_ids=depth_ids,
@@ -894,7 +1081,8 @@ class DOMLMModel(DOMLMPreTrainedModel):
         )
         sequence_output = encoder_outputs[0]
 
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        pooled_output = self.pooler(
+            sequence_output) if self.pooler is not None else None
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
@@ -907,10 +1095,17 @@ class DOMLMModel(DOMLMPreTrainedModel):
             cross_attentions=encoder_outputs.cross_attentions,
         )
 
-    # Copied from transformers.models.bert.modeling_bert.BertModel.prepare_inputs_for_generation
-    def prepare_inputs_for_generation(self, input_ids, past=None, attention_mask=None, use_cache=True, **model_kwargs):
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertModel.prepare_inputs_for_generation
+    def prepare_inputs_for_generation(self,
+                                      input_ids,
+                                      past=None,
+                                      attention_mask=None,
+                                      use_cache=True,
+                                      **model_kwargs):
         input_shape = input_ids.shape
-        # if model is used as a decoder in encoder-decoder model, the decoder attention mask is created on the fly
+        # if model is used as a decoder in encoder-decoder model,
+        # the decoder attention mask is created on the fly
         if attention_mask is None:
             attention_mask = input_ids.new_ones(input_shape)
 
@@ -925,29 +1120,37 @@ class DOMLMModel(DOMLMPreTrainedModel):
             "use_cache": use_cache,
         }
 
-    # Copied from transformers.models.bert.modeling_bert.BertModel._reorder_cache
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertModel._reorder_cache
     def _reorder_cache(self, past, beam_idx):
         reordered_past = ()
         for layer_past in past:
-            reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
+            reordered_past += (tuple(past_state.index_select(0, beam_idx)
+                               for past_state in layer_past),)
         return reordered_past
 
-@add_start_docstrings("""Bert Model with a `language modeling` head on top.""", DOMLM_START_DOCSTRING)
+
+@add_start_docstrings("""Bert Model with a `language modeling` head on top.""",
+                      DOMLM_START_DOCSTRING)
 class DOMLMForMaskedLM(DOMLMPreTrainedModel):
 
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
-    _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias", r"cls.predictions.decoder.weight"]
+    _keys_to_ignore_on_load_missing = [
+        r"position_ids",
+        r"predictions.decoder.bias",
+        r"cls.predictions.decoder.weight"]
 
     def __init__(self, config):
         super().__init__(config)
 
         if config.is_decoder:
             logger.warning(
-                "If you want to use `DOMLMForMaskedLM` make sure `config.is_decoder=False` for "
+                "If you want to use `DOMLMForMaskedLM` make sure "
+                "`config.is_decoder=False` for "
                 "bi-directional self-attention."
             )
 
-        self.domlm = DOMLMModel(config, add_pooling_layer=False)        
+        self.domlm = DOMLMModel(config, add_pooling_layer=False)
         self.cls = DOMLMOnlyMLMHead(config)
 
         # Initialize weights and apply final processing
@@ -959,11 +1162,12 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
     def set_output_embeddings(self, new_embeddings):
         self.cls.predictions.decoder = new_embeddings
 
-    @add_start_docstrings_to_model_forward(DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))    
+    @add_start_docstrings_to_model_forward(
+            DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
     def forward(
-        self,        
+        self,
         input_ids: Optional[torch.LongTensor] = None,
-        node_ids: Optional[torch.LongTensor] = None, 
+        node_ids: Optional[torch.LongTensor] = None,
         parent_node_ids: Optional[torch.LongTensor] = None,
         sibling_node_ids: Optional[torch.LongTensor] = None,
         depth_ids: Optional[torch.LongTensor] = None,
@@ -975,21 +1179,26 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
         inputs_embeds: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,        
-        labels: Optional[torch.Tensor] = None,        
+        return_dict: Optional[bool] = None,
+        labels: Optional[torch.Tensor] = None,
     ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
         r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the masked language modeling loss. Indices should be in `[-100, 0, ...,
-            config.vocab_size]` (see `input_ids` docstring) Tokens with indices set to `-100` are ignored (masked), the
-            loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`
+        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`,
+                *optional*):
+            Labels for computing the masked language modeling loss.
+            Indices should be in `[-100, 0, ..., config.vocab_size]`
+            (see `input_ids` docstring).
+            Tokens with indices set to `-100` are ignored (masked), the
+            loss is only computed for the tokens with labels in
+            `[0, ..., config.vocab_size]`
         """
 
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = return_dict if return_dict is not None else \
+            self.config.use_return_dict
 
         outputs = self.domlm(
             input_ids,
-            node_ids=node_ids, 
+            node_ids=node_ids,
             parent_node_ids=parent_node_ids,
             sibling_node_ids=sibling_node_ids,
             depth_ids=depth_ids,
@@ -998,7 +1207,7 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
-            inputs_embeds=inputs_embeds,            
+            inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
@@ -1010,11 +1219,14 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
         masked_lm_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()  # -100 index = padding token
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+            masked_lm_loss = loss_fct(
+                prediction_scores.view(-1, self.config.vocab_size),
+                labels.view(-1))
 
         if not return_dict:
             output = (prediction_scores,) + outputs[2:]
-            return ((masked_lm_loss,) + output) if masked_lm_loss is not None else output
+            return ((masked_lm_loss,) + output) if masked_lm_loss is not None \
+                else output
 
         return MaskedLMOutput(
             loss=masked_lm_loss,
@@ -1023,7 +1235,10 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-    def prepare_inputs_for_generation(self, input_ids, attention_mask=None, **model_kwargs):
+    def prepare_inputs_for_generation(self,
+                                      input_ids,
+                                      attention_mask=None,
+                                      **model_kwargs):
         input_shape = input_ids.shape
         effective_batch_size = input_shape[0]
 
@@ -1031,27 +1246,34 @@ class DOMLMForMaskedLM(DOMLMPreTrainedModel):
         if self.config.pad_token_id is None:
             raise ValueError("The PAD token should be defined for generation")
 
-        attention_mask = torch.cat([attention_mask, attention_mask.new_zeros((attention_mask.shape[0], 1))], dim=-1)
+        attention_mask = torch.cat(
+            [attention_mask,
+             attention_mask.new_zeros((attention_mask.shape[0], 1))], dim=-1)
         dummy_token = torch.full(
-            (effective_batch_size, 1), self.config.pad_token_id, dtype=torch.long, device=input_ids.device
+            (effective_batch_size, 1),
+            self.config.pad_token_id,
+            dtype=torch.long,
+            device=input_ids.device
         )
         input_ids = torch.cat([input_ids, dummy_token], dim=1)
 
         return {"input_ids": input_ids, "attention_mask": attention_mask}
 
 
-
 @add_start_docstrings(
     """
-    DOMLM Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
-    layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
+    DOMLM Model with a span classification head on top for
+    extractive question-answering tasks like SQuAD (a linear
+    layers on top of the hidden-states output to compute
+    `span start logits` and `span end logits`).
     """,
     DOMLM_START_DOCSTRING,
 )
 class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
 
-    # Copied from transformers.models.bert.modeling_bert.BertForQuestionAnswering.__init__ with bert->DOMLM, Bert->DOMLM
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertForQuestionAnswering.__init__ with bert->DOMLM, Bert->DOMLM
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1062,12 +1284,14 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    @add_start_docstrings_to_model_forward(DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    @replace_return_docstrings(output_type=QuestionAnsweringModelOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(
+            DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(
+        output_type=QuestionAnsweringModelOutput, config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
-        node_ids: Optional[torch.LongTensor] = None, 
+        node_ids: Optional[torch.LongTensor] = None,
         parent_node_ids: Optional[torch.LongTensor] = None,
         sibling_node_ids: Optional[torch.LongTensor] = None,
         depth_ids: Optional[torch.LongTensor] = None,
@@ -1084,13 +1308,19 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], QuestionAnsweringModelOutput]:
         r"""
-        start_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for position (index) of the start of the labelled span for computing the token classification loss.
-            Positions are clamped to the length of the sequence (`sequence_length`). Position outside of the sequence
+        start_positions (`torch.LongTensor` of shape `(batch_size,)`,
+                        *optional*):
+            Labels for position (index) of the start of the labelled span for
+            computing the token classification loss.
+            Positions are clamped to the length of the sequence
+            (`sequence_length`). Position outside of the sequence
             are not taken into account for computing the loss.
-        end_positions (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for position (index) of the end of the labelled span for computing the token classification loss.
-            Positions are clamped to the length of the sequence (`sequence_length`). Position outside of the sequence
+        end_positions (`torch.LongTensor` of shape `(batch_size,)`,
+                        *optional*):
+            Labels for position (index) of the end of the labelled span for
+            computing the token classification loss.
+            Positions are clamped to the length of the sequence
+            (`sequence_length`). Position outside of the sequence
             are not taken into account for computing the loss.
 
         Returns:
@@ -1101,13 +1331,18 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
         >>> from transformers import DOMLMProcessor, DOMLMForQuestionAnswering
         >>> import torch
 
-        >>> processor = DOMLMProcessor.from_pretrained("microsoft/DOMLM-base-finetuned-websrc")
-        >>> model = DOMLMForQuestionAnswering.from_pretrained("microsoft/DOMLM-base-finetuned-websrc")
+        >>> processor = DOMLMProcessor.from_pretrained(
+                            "microsoft/DOMLM-base-finetuned-websrc")
+        >>> model = DOMLMForQuestionAnswering.from_pretrained(
+                            "microsoft/DOMLM-base-finetuned-websrc")
 
-        >>> html_string = "<html> <head> <title>My name is Niels</title> </head> </html>"
+        >>> html_string = \
+            "<html> <head> <title>My name is Niels</title> </head> </html>"
         >>> question = "What's his name?"
 
-        >>> encoding = processor(html_string, questions=question, return_tensors="pt")
+        >>> encoding = processor(html_string,
+                                questions=question,
+                                return_tensors="pt")
 
         >>> with torch.no_grad():
         ...     outputs = model(**encoding)
@@ -1115,15 +1350,18 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
         >>> answer_start_index = outputs.start_logits.argmax()
         >>> answer_end_index = outputs.end_logits.argmax()
 
-        >>> predict_answer_tokens = encoding.input_ids[0, answer_start_index : answer_end_index + 1]
+        >>> predict_answer_tokens = \
+                        encoding.input_ids[0,
+                          answer_start_index : answer_end_index + 1]
         >>> processor.decode(predict_answer_tokens).strip()
         'Niels'
         ```"""
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = return_dict if return_dict is not None else \
+            self.config.use_return_dict
 
         outputs = self.domlm(
             input_ids,
-            node_ids=node_ids, 
+            node_ids=node_ids,
             parent_node_ids=parent_node_ids,
             sibling_node_ids=sibling_node_ids,
             depth_ids=depth_ids,
@@ -1152,7 +1390,8 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
                 start_positions = start_positions.squeeze(-1)
             if len(end_positions.size()) > 1:
                 end_positions = end_positions.squeeze(-1)
-            # sometimes the start/end positions are outside our model inputs, we ignore these terms
+            # sometimes the start/end positions are outside our model inputs,
+            # we ignore these terms
             ignored_index = start_logits.size(1)
             start_positions.clamp_(0, ignored_index)
             end_positions.clamp_(0, ignored_index)
@@ -1164,7 +1403,8 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
 
         if not return_dict:
             output = (start_logits, end_logits) + outputs[2:]
-            return ((total_loss,) + output) if total_loss is not None else output
+            return ((total_loss,) + output) if total_loss is not None else \
+                output
 
         return QuestionAnsweringModelOutput(
             loss=total_loss,
@@ -1175,16 +1415,21 @@ class DOMLMForQuestionAnswering(DOMLMPreTrainedModel):
         )
 
 
-@add_start_docstrings("""DOMLM Model with a `token_classification` head on top.""", DOMLM_START_DOCSTRING)
+@add_start_docstrings(
+    """DOMLM Model with a `token_classification` head on top.""",
+    DOMLM_START_DOCSTRING)
 class DOMLMForTokenClassification(DOMLMPreTrainedModel):
-    # Copied from transformers.models.bert.modeling_bert.BertForTokenClassification.__init__ with bert->DOMLM, Bert->DOMLM
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertForTokenClassification.__init__ with bert->DOMLM, Bert->DOMLM
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
 
         self.domlm = DOMLMModel(config, add_pooling_layer=False)
         classifier_dropout = (
-            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+            config.classifier_dropout
+            if config.classifier_dropout is not None
+            else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
@@ -1197,12 +1442,14 @@ class DOMLMForTokenClassification(DOMLMPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    @add_start_docstrings_to_model_forward(DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    @replace_return_docstrings(output_type=MaskedLMOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(
+            DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=MaskedLMOutput,
+                               config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
-        node_ids: Optional[torch.LongTensor] = None, 
+        node_ids: Optional[torch.LongTensor] = None,
         parent_node_ids: Optional[torch.LongTensor] = None,
         sibling_node_ids: Optional[torch.LongTensor] = None,
         depth_ids: Optional[torch.LongTensor] = None,
@@ -1218,25 +1465,33 @@ class DOMLMForTokenClassification(DOMLMPreTrainedModel):
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
         r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the token classification loss. Indices should be in `[0, ..., config.num_labels - 1]`.
+        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`,
+                *optional*):
+            Labels for computing the token classification loss.
+            Indices should be in `[0, ..., config.num_labels - 1]`.
 
         Returns:
 
         Examples:
 
         ```python
-        >>> from transformers import AutoProcessor, AutoModelForTokenClassification
+        >>> from transformers import (AutoProcessor,
+                                        AutoModelForTokenClassification)
         >>> import torch
 
         >>> processor = AutoProcessor.from_pretrained("microsoft/DOMLM-base")
         >>> processor.parse_html = False
-        >>> model = AutoModelForTokenClassification.from_pretrained("microsoft/DOMLM-base", num_labels=7)
+        >>> model = AutoModelForTokenClassification.from_pretrained(
+                                    "microsoft/DOMLM-base", num_labels=7)
 
         >>> nodes = ["hello", "world"]
-        >>> xpaths = ["/html/body/div/li[1]/div/span", "/html/body/div/li[1]/div/span"]
+        >>> xpaths = ["/html/body/div/li[1]/div/span",
+                    "/html/body/div/li[1]/div/span"]
         >>> node_labels = [1, 2]
-        >>> encoding = processor(nodes=nodes, xpaths=xpaths, node_labels=node_labels, return_tensors="pt")
+        >>> encoding = processor(nodes=nodes,
+                                xpaths=xpaths,
+                                node_labels=node_labels,
+                                return_tensors="pt")
 
         >>> with torch.no_grad():
         ...     outputs = model(**encoding)
@@ -1244,11 +1499,12 @@ class DOMLMForTokenClassification(DOMLMPreTrainedModel):
         >>> loss = outputs.loss
         >>> logits = outputs.logits
         ```"""
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = return_dict if return_dict is not None else \
+            self.config.use_return_dict
 
         outputs = self.domlm(
             input_ids,
-            node_ids=node_ids, 
+            node_ids=node_ids,
             parent_node_ids=parent_node_ids,
             sibling_node_ids=sibling_node_ids,
             depth_ids=depth_ids,
@@ -1264,7 +1520,8 @@ class DOMLMForTokenClassification(DOMLMPreTrainedModel):
         )
 
         sequence_output = outputs[0]
-        prediction_scores = self.classifier(sequence_output)  # (batch_size, seq_length, node_type_size)
+        # (batch_size, seq_length, node_type_size)
+        prediction_scores = self.classifier(sequence_output)
 
         loss = None
         if labels is not None:
@@ -1288,13 +1545,15 @@ class DOMLMForTokenClassification(DOMLMPreTrainedModel):
 
 @add_start_docstrings(
     """
-    DOMLM Model transformer with a sequence classification/regression head on top (a linear layer on top of the
+    DOMLM Model transformer with a sequence classification/regression head on
+    top (a linear layer on top of the
     pooled output) e.g. for GLUE tasks.
     """,
     DOMLM_START_DOCSTRING,
 )
 class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
-    # Copied from transformers.models.bert.modeling_bert.BertForSequenceClassification.__init__ with bert->DOMLM, Bert->DOMLM
+    # Copied from transformers.models.bert.modeling_bert.
+    # BertForSequenceClassification.__init__ with bert->DOMLM, Bert->DOMLM
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
@@ -1302,7 +1561,8 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
 
         self.domlm = DOMLMModel(config)
         classifier_dropout = (
-            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+            config.classifier_dropout if config.classifier_dropout is not None
+            else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
@@ -1310,12 +1570,14 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-    @add_start_docstrings_to_model_forward(DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
-    @replace_return_docstrings(output_type=SequenceClassifierOutput, config_class=_CONFIG_FOR_DOC)
+    @add_start_docstrings_to_model_forward(
+            DOMLM_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @replace_return_docstrings(output_type=SequenceClassifierOutput,
+                               config_class=_CONFIG_FOR_DOC)
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
-        node_ids: Optional[torch.LongTensor] = None, 
+        node_ids: Optional[torch.LongTensor] = None,
         parent_node_ids: Optional[torch.LongTensor] = None,
         sibling_node_ids: Optional[torch.LongTensor] = None,
         depth_ids: Optional[torch.LongTensor] = None,
@@ -1331,23 +1593,29 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], SequenceClassifierOutput]:
         r"""
-        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
-            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
-            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+        labels (`torch.LongTensor` of shape `(batch_size,)`,
+                *optional*):
+            Labels for computing the sequence classification/regression loss.
+            Indices should be in `[0, ..., config.num_labels - 1]`.
+            If `config.num_labels == 1` a regression loss is computed
+            (Mean-Square loss), If `config.num_labels > 1` a classification
+            loss is computed (Cross-Entropy).
 
         Returns:
 
         Examples:
 
         ```python
-        >>> from transformers import AutoProcessor, AutoModelForSequenceClassification
+        >>> from transformers import (AutoProcessor,
+                                    AutoModelForSequenceClassification)
         >>> import torch
 
         >>> processor = AutoProcessor.from_pretrained("microsoft/DOMLM-base")
-        >>> model = AutoModelForSequenceClassification.from_pretrained("microsoft/DOMLM-base", num_labels=7)
+        >>> model = AutoModelForSequenceClassification.from_pretrained(
+                                        "microsoft/DOMLM-base", num_labels=7)
 
-        >>> html_string = "<html> <head> <title>Page Title</title> </head> </html>"
+        >>> html_string = \
+            "<html> <head> <title>Page Title</title> </head> </html>"
         >>> encoding = processor(html_string, return_tensors="pt")
 
         >>> with torch.no_grad():
@@ -1356,11 +1624,12 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
         >>> loss = outputs.loss
         >>> logits = outputs.logits
         ```"""
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = return_dict if return_dict is not None else \
+            self.config.use_return_dict
 
         outputs = self.domlm(
             input_ids,
-            node_ids=node_ids, 
+            node_ids=node_ids,
             parent_node_ids=parent_node_ids,
             sibling_node_ids=sibling_node_ids,
             depth_ids=depth_ids,
@@ -1385,7 +1654,8 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
             if self.config.problem_type is None:
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
-                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                elif self.num_labels > 1 and (labels.dtype == torch.long or
+                                              labels.dtype == torch.int):
                     self.config.problem_type = "single_label_classification"
                 else:
                     self.config.problem_type = "multi_label_classification"
@@ -1398,7 +1668,8 @@ class DOMLMForSequenceClassification(DOMLMPreTrainedModel):
                     loss = loss_fct(logits, labels)
             elif self.config.problem_type == "single_label_classification":
                 loss_fct = CrossEntropyLoss()
-                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+                loss = loss_fct(
+                    logits.view(-1, self.num_labels), labels.view(-1))
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()
                 loss = loss_fct(logits, labels)

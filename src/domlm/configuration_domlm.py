@@ -10,42 +10,49 @@ from transformers.configuration_utils import PretrainedConfig
 logger = logging.get_logger(__name__)
 
 
-
 class DOMLMConfig(PretrainedConfig):
     r"""
     ...
 
-    Configuration objects inherit from [`BertConfig`] and can be used to control the model outputs. Read the
+    Configuration objects inherit from [`BertConfig`] and can be used to
+    control the model outputs. Read the
     documentation from [`BertConfig`] for more information.
 
     Args:
         vocab_size (`int`, *optional*, defaults to 30522):
-            Vocabulary size of the MarkupLM model. Defines the different tokens that can be represented by the
+            Vocabulary size of the MarkupLM model. Defines the different
+            tokens that can be represented by the
             *inputs_ids* passed to the forward method of [`MarkupLMModel`].
         hidden_size (`int`, *optional*, defaults to 768):
             Dimensionality of the encoder layers and the pooler layer.
         num_hidden_layers (`int`, *optional*, defaults to 12):
             Number of hidden layers in the Transformer encoder.
         num_attention_heads (`int`, *optional*, defaults to 12):
-            Number of attention heads for each attention layer in the Transformer encoder.
+            Number of attention heads for each attention layer in the
+            Transformer encoder.
         intermediate_size (`int`, *optional*, defaults to 3072):
-            Dimensionality of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
+            Dimensionality of the "intermediate" (i.e., feed-forward) layer
+            in the Transformer encoder.
         hidden_act (`str` or `function`, *optional*, defaults to `"gelu"`):
-            The non-linear activation function (function or string) in the encoder and pooler. If string, `"gelu"`,
+            The non-linear activation function (function or string) in the
+            encoder and pooler. If string, `"gelu"`,
             `"relu"`, `"silu"` and `"gelu_new"` are supported.
         hidden_dropout_prob (`float`, *optional*, defaults to 0.1):
-            The dropout probability for all fully connected layers in the embeddings, encoder, and pooler.
+            The dropout probability for all fully connected layers in the
+            embeddings, encoder, and pooler.
         attention_probs_dropout_prob (`float`, *optional*, defaults to 0.1):
-            The dropout ratio for the attention probabilities.        
+            The dropout ratio for the attention probabilities.
         type_vocab_size (`int`, *optional*, defaults to 2):
-            The vocabulary size of the `token_type_ids` passed into [`MarkupLMModel`].
+            The vocabulary size of the `token_type_ids` passed into
+            [`DOMLMModel`].
         initializer_range (`float`, *optional*, defaults to 0.02):
-            The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
+            The standard deviation of the truncated_normal_initializer for
+            initializing all weight matrices.
         layer_norm_eps (`float`, *optional*, defaults to 1e-12):
             The epsilon used by the layer normalization layers.
         gradient_checkpointing (`bool`, *optional*, defaults to `False`):
-            If True, use gradient checkpointing to save memory at the expense of slower backward pass.
-        
+            If True, use gradient checkpointing to save memory at the expense
+            of slower backward pass.
         max_node_embeddings (`int`, *optional*, defaults to 2048):
             The maximum DOM elements amount this model might ever be used with.
         max_sibling_embeddings (`int`, *optional*, defaults to 128):
@@ -55,8 +62,9 @@ class DOMLMConfig(PretrainedConfig):
         max_tag_embeddings (`int`, *optional*, defaults to 128):
             The maximum value that the tag unit embedding might ever use.
         max_position_embeddings (`int`, *optional*, defaults to 512):
-            The maximum sequence length that this model might ever be used with. Typically set this to something large
-            just in case (e.g., 512 or 1024 or 2048).
+            The maximum sequence length that this model might ever be used
+            with. Typically set this to something large just in case
+            (e.g., 512 or 1024 or 2048).
 
     """
     model_type = "domlm"
@@ -70,23 +78,22 @@ class DOMLMConfig(PretrainedConfig):
         intermediate_size=3072,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,        
+        attention_probs_dropout_prob=0.1,
         type_vocab_size=2,
         initializer_range=0.02,
         layer_norm_eps=1e-12,
         pad_token_id=0,
         bos_token_id=0,
         eos_token_id=2,
-        gradient_checkpointing=False,        
+        gradient_checkpointing=False,
         position_embedding_type="absolute",
         use_cache=True,
         classifier_dropout=None,
         # should it be global for whole DOM or only for subtrees?
-        max_node_embeddings=2048, # calculate mean elements count in swde dataset
-        
-        max_sibling_embeddings=128, # should be fine
+        max_node_embeddings=2048,  # calculate mean elements count in dataset
+        max_sibling_embeddings=128,  # should be fine
         max_depth_embeddings=128,
-        max_tag_embeddings = 128,
+        max_tag_embeddings=128,
         max_position_embeddings=512,
         **kwargs
     ):
@@ -111,6 +118,7 @@ class DOMLMConfig(PretrainedConfig):
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
+
         # additional properties
         self.max_node_embeddings = max_node_embeddings
         self.max_sibling_embeddings = max_sibling_embeddings
@@ -118,15 +126,15 @@ class DOMLMConfig(PretrainedConfig):
         self.max_tag_embeddings = max_tag_embeddings
         self.max_position_embeddings = max_position_embeddings
 
-        self.node_pad_id = max_node_embeddings  - 1 
-        self.sibling_pad_id = max_sibling_embeddings - 1 
+        self.node_pad_id = max_node_embeddings - 1
+        self.sibling_pad_id = max_sibling_embeddings - 1
         self.depth_pad_id = max_depth_embeddings - 1
         self.tag_pad_id = max_tag_embeddings - 1
 
 
 class DOMLMAttrExtractConfig(DOMLMConfig):
     model_type = "domlm_ae"
-    
+
     def __init__(self, num_labels, **kwargs):
         super().__init__(**kwargs)
         self.num_labels = num_labels

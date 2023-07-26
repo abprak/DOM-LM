@@ -4,14 +4,15 @@ import sys
 from pathlib import Path
 import tqdm
 import pickle
+from src.preprocess import (extract_features,
+                            extract_features_ae_task)
+from src.domlm import DOMLMConfig
+
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
-
-from src.preprocess import extract_features, extract_features_ae_task
-from src.domlm import DOMLMConfig
 
 
 def extract_labels(label_files):
@@ -31,7 +32,8 @@ def extract_labels(label_files):
                     'value': value,
                 }
     return label_info
-    
+
+
 def preprocess_swde(input_dir, config, output_dir, domains):
     SWDE_PATH = Path(input_dir)
     PROC_PATH = Path(output_dir)
@@ -42,27 +44,29 @@ def preprocess_swde(input_dir, config, output_dir, domains):
     start_from = 0
     for domain in DOMAINS:
         files = sorted((SWDE_PATH / domain).glob("**/*.htm"))[start_from:]
-        pbar = tqdm.tqdm(files,total=len(files))
+        pbar = tqdm.tqdm(files, total=len(files))
         errors = []
-        for path in pbar:    
-            pbar.set_description(f"Processing {path.relative_to(SWDE_PATH / domain)}")
-            with open(path,'r') as f:
+        for path in pbar:
+            desc = path.relative_to(SWDE_PATH / domain)
+            pbar.set_description(f"Processing {desc}")
+            with open(path, 'r') as f:
                 html = f.read()
             try:
-                features = extract_features(html,config)
+                features = extract_features(html, config)
                 dir_name = PROC_PATH / domain / path.parent.name
-                dir_name.mkdir(parents=True,exist_ok=True)
-                with open(dir_name / path.with_suffix(".pkl").name,'wb') as f:
-                    pickle.dump(features,f)          
+                dir_name.mkdir(parents=True, exist_ok=True)
+                with open(dir_name / path.with_suffix(".pkl").name, 'wb') as f:
+                    pickle.dump(features, f)
             except Exception as e:
                 print(e)
                 errors.append(path)
                 pass
         print(f"Total errors: {len(errors)}")
 
+
 def preprocess_swde_attr_extract(input_dir, config_file, output_dir, domains):
-    SWDE_PATH = Path(input_dir)
-    LABEL_PATH = SWDE_PATH / 'groundtruth'
+    SWDE_PATH = Path(input_dir) / 'webpages'
+    LABEL_PATH = Path(input_dir) / 'groundtruth'
     PROC_PATH = Path(output_dir)
     DOMAINS = domains
 
@@ -73,22 +77,34 @@ def preprocess_swde_attr_extract(input_dir, config_file, output_dir, domains):
             if not website_dir.is_dir():
                 continue
             files = sorted((website_dir.glob("./*.htm")))
-            website_name = website_dir.name.split('-')[1][:website_dir.name.split('-')[1].index('(')]
-            label_files = sorted((LABEL_PATH / domain).glob(f'{domain}-{website_name}*'))
+            website_name = website_dir.name.split('-')[1][
+                :website_dir.name.split('-')[1].index('(')
+                ]
+            label_files = sorted(
+                (LABEL_PATH / domain).glob(f'{domain}-{website_name}*')
+                )
             label_infos = extract_labels(label_files)
             pbar = tqdm.tqdm(files, total=len(files))
             errors = []
             for path in pbar:
-                pbar.set_description(f"Processing {path.relative_to(SWDE_PATH / domain)}")
-                with open(path,'r') as f:
+                pbar.set_description(
+                    f"Processing {path.relative_to(SWDE_PATH / domain)}")
+                dir_name = PROC_PATH / domain / path.parent.name
+                dir_name.mkdir(parents=True, exist_ok=True)
+                output_filename = dir_name / path.with_suffix(".pkl").name
+                if output_filename.exists():
+                    continue
+
+                with open(path, 'r') as f:
                     html = f.read()
                 try:
                     label2text = label_infos[path.name.split('.')[0]]
-                    text2label = {v['value']: {'label':k, 'nums':v['nums']} for k,v in label2text.items()}
-                    features = extract_features_ae_task(html, text2label, config)
-                    dir_name = PROC_PATH / domain / path.parent.name
-                    dir_name.mkdir(parents=True,exist_ok=True)
-                    with open(dir_name / path.with_suffix(".pkl").name,'wb') as f:
+                    text2label = {v['value']: {'label': k, 'nums': v['nums']}
+                                  for k, v in label2text.items()}
+                    features = extract_features_ae_task(html,
+                                                        text2label,
+                                                        config)
+                    with open(output_filename, 'wb') as f:
                         pickle.dump(features, f)
                 except Exception as e:
                     print(e)
@@ -99,11 +115,31 @@ def preprocess_swde_attr_extract(input_dir, config_file, output_dir, domains):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', type=str, default='attr_extract', help='preprocess data for tasks', choices=['domlm', 'attr_extract'])
-    parser.add_argument('--input_dir', type=str, default='data/swde_html/sourceCode/sourceCode', help='data directory')
-    parser.add_argument('--config', type=str, default='domlm-config/config.json', help='config file')
-    parser.add_argument('--output_dir', type=str, default='data/swde_ae_preprocessed', help='output directory')
-    parser.add_argument('--domains', type=str, default='university', help='domains')
+    parser.add_argument('--task', type=str,
+                        default='attr_extract',
+                        help='preprocess data for tasks',
+                        choices=['domlm', 'attr_extract'])
+
+    parser.add_argument('--input_dir',
+                        type=str,
+                        default='data/swde_html/sourceCode/sourceCode',
+                        help='data directory')
+
+    parser.add_argument('--config',
+                        type=str,
+                        default='domlm-config/config.json',
+                        help='config file')
+
+    parser.add_argument('--output_dir',
+                        type=str,
+                        default='data/swde_ae_preprocessed',
+                        help='output directory')
+
+    parser.add_argument('--domains',
+                        type=str,
+                        default='university',
+                        help='domains')
+
     args = parser.parse_args()
 
     task = args.task
